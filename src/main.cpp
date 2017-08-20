@@ -92,19 +92,53 @@ int main() {
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
 
+          //convert speed from mph to m/s
+          v = v*0.447;
+
+          int num_wp = ptsx.size();
+
           /*
           * TODO: Calculate steering angle and throttle using MPC.
           *
           * Both are in between [-1, 1].
           *
           */
+
           double steer_value;
           double throttle_value;
+
+          //transform the points into the vehicle coordinate system.
+          VectorXd ptsx_vehicle(num_wp);
+          VectorXd ptsy_vehicle(num_wp);
+
+          for(int i=0; i< N;i++){
+            ptsx_vehicle = (ptsx[i] - px)*cos(-psi) - (ptsy[i] - py)*sin(-psi);
+            ptsy_vehicle = (ptsy[i] - py)*cos(-psi) - (ptsx[i] - px)*sin(-psi);
+          }
+
+          //Fit a 3rd degree polynomial to the transformed points
+          auto coeffs=polyfit(ptsx_vehicle,ptsy_vehicle,3);
+
+          //get cte and epsi errors 
+          double cte = polyeval(coeffs[0], 0.0);
+          double epsi = -atan(coeffs[1]);
+
+
+          //pass current state and trajectory coefficients to the MPC solve function
+          VectorXd state(6);
+          state << 0,0,0,v,cte,epsi;
+
+          auto vars = mpc.Solve(state, coeffs);
+          steer_value = vars[0];
+          throttle_value = vars[1];
+
+
+
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          msgJson["steering_angle"] = steer_value/(deg2rad(25));
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
